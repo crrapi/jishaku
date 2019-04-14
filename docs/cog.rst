@@ -51,7 +51,7 @@ This will make it very difficult to cancel those tasks.
 
     Shows a list of the currently running command-tasks. This includes the index, command qualified name and time invoked.
 
-.. py:function:: jsk cancel <index>
+.. py:function:: jsk cancel <index: int>
 
     Cancels the command-task at the provided index. If the index is -1, it will cancel the most recent still-running task.
 
@@ -95,6 +95,8 @@ Commands
 
 .. py:function:: jsk [python|py] <argument: str>
 
+    |tasked|
+
     Evaluates Python code, returning the results verbatim in its clearest representation.
 
     If None is received, nothing is sent.
@@ -110,6 +112,8 @@ Commands
     Any other instance is ``repr``'d and sent using the same rules as a string.
 
 .. py:function:: jsk [python_inspect|pythoninspect|pyi] <argument: str>
+
+    |tasked|
 
     Evaluates Python code, returning an inspection of the results.
 
@@ -133,6 +137,8 @@ Commands
 
 .. py:function:: jsk [shell|sh] <argument: str>
 
+    |tasked|
+
     Evaluates code in the bash shell. ``stdout`` and ``stderr`` are read back asynchronously into the current channel.
 
     As with any code evaluation, use of this command may freeze your bot or damage your system. Choose what you enter carefully.
@@ -146,9 +152,67 @@ Commands
 
     If loading the extension fails, it will be reported with a traceback.
 
+    Extensions can be specified en masse by typing e.g. ``cogs.*``.
+    This searches for anything that looks like an extension in the folder and loads/reloads it.
+
+    ``jsk reload ~`` will reload every extension the bot currently has loaded.
+
 
 .. py:function:: jsk unload [extensions...]
 
     Unloads a number of extensions. Extension names are delimited by spaces.
 
+    Matching rules are the same as ``jsk load``.
+
+    Running ``jsk unload ~`` will unload every extension on your bot. This includes jishaku, which may leave you unable to maintain your bot
+    until it is restarted. Use with care.
+
     If unloading the extension fails, it will be reported with a traceback.
+
+
+.. py:function:: jsk su <member> <command: str>
+
+    Runs a command as if it were ran by someone else.
+
+    This allows you to test how your bot would react to other users, or perform administrative actions you may have not programmed yourself
+    to be able to use by default.
+
+
+.. py:function:: jsk in <channel> <command: str>
+
+    Runs a command as if it were in a different channel.
+
+    Because it matches a `TextChannel`, using this in a guild will only work for other channels in that guild.
+    Cross-server remote commanding can be facilitated by DMing the bot instead.
+
+
+.. py:function:: jsk sudo <command: str>
+
+    Runs a command, ignoring any checks or cooldowns on the command.
+
+    This forces the relevant callbacks to be triggered, and can be used to let you bypass any large cooldowns or conditions you have set.
+
+.. py:function:: jsk debug <command: str>
+
+    Runs a command using ``jsk python``-style timing and exception reporting.
+
+    This allows you to invoke a broken command with this command to get the exception directly without having to read logs.
+
+    When the command finishes, the time to run will be reported.
+
+.. py:function:: jsk repeat <times: int> <command: str>
+
+    |tasked|
+
+    Repeats a command the specified amount of times.
+
+    This works like a direct message invocation, so cooldowns *will* be honored.
+    You can use ``jsk repeat . jsk sudo ..`` to bypass cooldowns on each invoke if need be.
+
+    This command will wait for a previous invocation to finish before moving onto the next one.
+
+.. py:function:: jsk source <command_name: str>
+
+    Shows the source for a command in a :class:`PaginatorInterface`.
+
+    This is similar to doing ``jsk cat`` on the source file, limited to the line span of the command.

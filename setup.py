@@ -27,99 +27,100 @@ SOFTWARE.
 
 import pathlib
 import re
+import subprocess
 
 from setuptools import setup
 
 ROOT = pathlib.Path(__file__).parent
 
-with open(str(ROOT / 'requirements.txt'), 'r', encoding='utf-8') as f:
-    REQUIREMENTS = f.read().splitlines()
-
-with open(str(ROOT / 'jishaku' / 'meta.py'), 'r', encoding='utf-8') as f:
+with open(ROOT / 'jishaku' / 'meta.py', 'r', encoding='utf-8') as f:
     VERSION = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE).group(1)
+
+EXTRA_REQUIRES = {}
+
+for feature in (ROOT / 'requirements').glob('*.txt'):
+    with open(feature, 'r', encoding='utf-8') as f:
+        EXTRA_REQUIRES[feature.with_suffix('').name] = f.read().splitlines()
+
+REQUIREMENTS = EXTRA_REQUIRES.pop('_')
 
 if not VERSION:
     raise RuntimeError('version is not set')
 
 
-if VERSION.endswith(('a', 'b', 'rc')):
-    try:
-        import subprocess
+try:
+    PROCESS = subprocess.Popen(
+        ['git', 'rev-list', '--count', 'HEAD'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
 
-        PROCESS = subprocess.Popen(['git', 'rev-list', '--count', 'HEAD'],
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        COMMIT_COUNT, ERR = PROCESS.communicate()
+    COMMIT_COUNT, ERR = PROCESS.communicate()
 
-        if COMMIT_COUNT:
-            PROCESS = subprocess.Popen(['git', 'rev-parse', '--short', 'HEAD'],
-                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            COMMIT_HASH, ERR = PROCESS.communicate()
+    if COMMIT_COUNT:
+        PROCESS = subprocess.Popen(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
 
-            if COMMIT_HASH:
+        COMMIT_HASH, ERR = PROCESS.communicate()
+
+        if COMMIT_HASH:
+            if VERSION.endswith(('a', 'b', 'rc')):
                 VERSION += COMMIT_COUNT.decode('utf-8').strip() + '+' + COMMIT_HASH.decode('utf-8').strip()
-    except FileNotFoundError:
-        pass
+            else:
+                VERSION += '.' + COMMIT_COUNT.decode('utf-8').strip()
+
+except FileNotFoundError:
+    pass
 
 
-with open(str(ROOT / 'README.rst'), 'r', encoding='utf-8') as f:
+with open(ROOT / 'README.rst', 'r', encoding='utf-8') as f:
     README = f.read()
 
 
-setup(name='jishaku',
-      author='Devon (Gorialis) R',
-      url='https://github.com/Gorialis/jishaku',
+setup(
+    name='jishaku',
+    author='Devon (Gorialis) R',
+    url='https://github.com/Gorialis/jishaku',
 
-      license='MIT',
-      description='A discord.py extension including useful tools for bot development and debugging.',
-      long_description=README,
-      long_description_content_type='text/x-rst',
+    license='MIT',
+    description='A discord.py extension including useful tools for bot development and debugging.',
+    long_description=README,
+    long_description_content_type='text/x-rst',
+    project_urls={
+        'Documentation': 'https://jishaku.readthedocs.io/en/latest/',
+        'Code': 'https://github.com/Gorialis/jishaku',
+        'Issue tracker': 'https://github.com/Gorialis/jishaku/issues'
+    },
 
-      version=VERSION,
-      packages=['jishaku', 'jishaku.repl'],
-      include_package_data=True,
-      install_requires=REQUIREMENTS,
-      python_requires='>=3.6.0',
+    version=VERSION,
+    packages=['jishaku', 'jishaku.repl'],
+    include_package_data=True,
+    install_requires=REQUIREMENTS,
+    python_requires='>=3.6.0',
 
-      extras_require={
-          'docs': [
-              'sphinx>=1.7.0',
-              'sphinxcontrib-asyncio'
-          ],
+    extras_require=EXTRA_REQUIRES,
 
-          'test': [
-              'coverage',
-              'flake8',
-              'isort',
-              'pylint',
-              'pytest',
-              'pytest-cov'
-          ],
+    download_url='https://github.com/Gorialis/jishaku/archive/{}.tar.gz'.format(VERSION),
 
-          'voice': [
-              'PyNaCl',
-              'youtube-dl'
-          ],
-
-          'procinfo': [
-              'psutil'
-          ]
-      },
-
-      download_url='https://github.com/Gorialis/jishaku/archive/{}.tar.gz'.format(VERSION),
-
-      classifiers=[
-          'Development Status :: 4 - Beta',
-          'Framework :: AsyncIO',
-          'Intended Audience :: Developers',
-          'License :: OSI Approved :: MIT License',
-          'Natural Language :: English',
-          'Operating System :: OS Independent',
-          'Programming Language :: Python :: 3 :: Only',
-          'Programming Language :: Python :: 3.6',
-          'Programming Language :: Python :: 3.7',
-          'Topic :: Communications :: Chat',
-          'Topic :: Internet',
-          'Topic :: Software Development :: Debuggers',
-          'Topic :: Software Development :: Testing',
-          'Topic :: Utilities'
-      ])
+    keywords='jishaku discord.py discord cog repl extension',
+    classifiers=[
+        'Development Status :: 4 - Beta',
+        'Framework :: AsyncIO',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: MIT License',
+        'Natural Language :: English',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Topic :: Communications :: Chat',
+        'Topic :: Internet',
+        'Topic :: Software Development :: Debuggers',
+        'Topic :: Software Development :: Testing',
+        'Topic :: Utilities'
+    ]
+)

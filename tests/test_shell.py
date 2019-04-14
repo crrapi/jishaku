@@ -10,53 +10,69 @@ jishaku.shell test
 """
 
 import asyncio
-import unittest
+import sys
+
+import pytest
 
 from jishaku.shell import ShellReader
+from utils import run_async
 
 
-class ShellTest(unittest.TestCase):
+@run_async
+async def test_reader_basic():
+    return_data = []
 
-    def test_executor(self):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.internal())
+    with ShellReader("echo hi") as reader:
+        async for result in reader:
+            return_data.append(result)
 
-    async def internal(self):
-        return_data_1 = []
+    assert len(return_data) == 1
+    assert return_data[0] == "hi"
 
-        with ShellReader("echo hi") as reader:
+    with pytest.raises(asyncio.TimeoutError):
+        with ShellReader("sleep 10", timeout=5) as reader:
             async for result in reader:
-                return_data_1.append(result)
+                pass
 
-        self.assertEqual(len(return_data_1), 1)
-        self.assertEqual(return_data_1[0], "hi")
 
-        return_data_2 = []
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Tests with Linux-only sh syntax"
+)
+@run_async
+async def test_linux():
+    return_data = []
 
-        with ShellReader(">&2 echo oops") as reader:
-            async for result in reader:
-                return_data_2.append(result)
+    with ShellReader(">&2 echo oops") as reader:
+        async for result in reader:
+            return_data.append(result)
 
-        self.assertEqual(len(return_data_2), 1)
-        self.assertEqual(return_data_2[0], "[stderr] oops")
+    assert len(return_data) == 1
+    assert return_data[0] == "[stderr] oops"
 
-        return_data_3 = []
+    return_data = []
 
-        with ShellReader("echo one; echo two") as reader:
-            async for result in reader:
-                return_data_3.append(result)
+    with ShellReader("echo one && echo two") as reader:
+        async for result in reader:
+            return_data.append(result)
 
-        self.assertEqual(len(return_data_3), 2)
-        self.assertEqual(return_data_3[0], "one")
-        self.assertEqual(return_data_3[1], "two")
+    assert len(return_data) == 2
+    assert return_data[0] == "one"
+    assert return_data[1] == "two"
 
-        hit_exception = False
 
-        try:
-            with ShellReader("echo one; sleep 10; echo two", timeout=5) as reader:
-                async for result in reader:
-                    pass
-        except asyncio.TimeoutError:
-            hit_exception = True
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Tests with Windows-only cmd syntax"
+)
+@run_async
+async def test_windows():
+    return_data = []
 
-        self.assertTrue(hit_exception)
+    with ShellReader("cmd /c \"echo one && echo two\"") as reader:
+        async for result in reader:
+            return_data.append(result)
+
+    assert len(return_data) == 2
+    assert return_data[0].strip() == "one"
+    assert return_data[1].strip() == "two"

@@ -41,8 +41,7 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
     A message and reaction based interface for paginators.
     """
 
-    def __init__(self, bot: commands.Bot, paginator: commands.Paginator, owner: discord.Member = None,
-                 emojis: EmojiSettings = None):
+    def __init__(self, bot: commands.Bot, paginator: commands.Paginator, **kwargs):
         if not isinstance(paginator, commands.Paginator):
             raise TypeError('paginator must be a commands.Paginator instance')
 
@@ -51,17 +50,23 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
         self.bot = bot
 
         self.message = None
-        self.owner = owner
         self.paginator = paginator
-        self.emojis = emojis or EMOJI_DEFAULT
+
+        self.owner = kwargs.pop('owner', None)
+        self.emojis = kwargs.pop('emoji', EMOJI_DEFAULT)
+        self.timeout = kwargs.pop('timeout', 7200)
+        self.delete_message = kwargs.pop('delete_message', False)
 
         self.sent_page_reactions = False
 
         self.task: asyncio.Task = None
-        self.update_lock: asyncio.Lock = asyncio.Semaphore(value=2)
+        self.update_lock: asyncio.Lock = asyncio.Semaphore(value=kwargs.pop('update_max', 2))
 
         if self.page_size > self.max_page_size:
-            raise ValueError('Paginator passed has too large of a page size for this interface.')
+            raise ValueError(
+                f'Paginator passed has too large of a page size for this interface. '
+                f'({self.page_size} > {self.max_page_size})'
+            )
 
     @property
     def pages(self):
@@ -73,7 +78,7 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
         # pylint: disable=protected-access
         paginator_pages = list(self.paginator._pages)
         if len(self.paginator._current_page) > 1:
-            paginator_pages.append('\n'.join(self.paginator._current_page) + '\n' + self.paginator.suffix)
+            paginator_pages.append('\n'.join(self.paginator._current_page) + '\n' + (self.paginator.suffix or ''))
         # pylint: enable=protected-access
 
         return paginator_pages
@@ -175,9 +180,8 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
         This method is generally for internal use only.
         """
 
-        for emoji in self.emojis:
-            if emoji:
-                await self.message.add_reaction(emoji)
+        for emoji in filter(None, self.emojis):
+            await self.message.add_reaction(emoji)
         self.sent_page_reactions = True
 
     @property
@@ -197,43 +201,58 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
 
         start, back, forward, end, close = self.emojis
 
-        def check(react, react_user):
+        def check(payload: discord.RawReactionActionEvent):
             """
             Checks if this reaction is related to the paginator interface.
             """
 
-            owner_check = react_user.id == self.owner.id if self.owner else not react_user.bot
+            owner_check = not self.owner or payload.user_id == self.owner.id
 
-            return react.message.id == self.message.id and \
-                react.emoji and react.emoji in self.emojis and \
-                react_user.id != self.bot.user.id and owner_check
+            emoji = payload.emoji
+            if isinstance(emoji, discord.PartialEmoji) and emoji.is_unicode_emoji():
+                emoji = emoji.name
+
+            return payload.message_id == self.message.id and \
+                emoji and emoji in self.emojis and \
+                payload.user_id != self.bot.user.id and owner_check
 
         try:
             while not self.bot.is_closed():
-                reaction, user = await self.bot.wait_for('reaction_add', check=check, timeout=3600)
+                payload = await self.bot.wait_for('raw_reaction_add', check=check, timeout=self.timeout)
 
-                if reaction.emoji == close:
+                emoji = payload.emoji
+                if isinstance(emoji, discord.PartialEmoji) and emoji.is_unicode_emoji():
+                    emoji = emoji.name
+
+                if emoji == close:
                     await self.message.delete()
                     return
 
-                if reaction.emoji == start:
+                if emoji == start:
                     self._display_page = 0
-                elif reaction.emoji == end:
+                elif emoji == end:
                     self._display_page = self.page_count - 1
-                elif reaction.emoji == back:
+                elif emoji == back:
                     self._display_page -= 1
-                elif reaction.emoji == forward:
+                elif emoji == forward:
                     self._display_page += 1
 
                 self.bot.loop.create_task(self.update())
 
                 try:
-                    await self.message.remove_reaction(reaction.emoji, user)
+                    await self.message.remove_reaction(payload.emoji, discord.Object(id=payload.user_id))
                 except discord.Forbidden:
                     pass
 
         except asyncio.TimeoutError:
-            await self.message.delete()
+            if self.delete_message:
+                return await self.message.delete()
+
+            for emoji in filter(None, self.emojis):
+                try:
+                    await self.message.remove_reaction(emoji, self.message.guild.me)
+                except (discord.Forbidden, discord.NotFound):
+                    pass
 
     async def update(self):
         """
@@ -398,3 +417,10 @@ class FilePaginator(commands.Paginator):
 
         for line in lines:
             self.add_line(line)
+
+
+class WrappedFilePaginator(FilePaginator, WrappedPaginator):
+    """
+    Combination of FilePaginator and WrappedPaginator.
+    In other words, a FilePaginator that supports line wrapping.
+    """

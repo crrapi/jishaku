@@ -28,21 +28,11 @@ jishaku is a debugging and experimenting cog for Discord bots using ``discord.py
 It is locked to Python 3.6+ and requirements will shift as new ``discord.py`` and Python versions release.
 This repo primarily exists for the purpose of example and usage in other bot projects.
 
+Documentation is available on `readthedocs <https://jishaku.readthedocs.io/en/latest/>`__, although incomplete.
+If in doubt, all commands have docstrings visible from the help command.
+
 Installing
 -----------
-
-+-------------------------------------------------------------------------------------------------------+
-| **This cog does not work without discord.py@rewrite**                                                 |
-|                                                                                                       |
-| **Not having it installed properly will make the cog fail to install**                                |
-|                                                                                                       |
-| Use the following to install ``discord.py@rewrite`` on the latest version:                            |
-|                                                                                                       |
-| .. code:: sh                                                                                          |
-|                                                                                                       |
-|     python3 -m pip install -U git+https://github.com/Rapptz/discord.py@rewrite#egg=discord.py[voice]  |
-+-------------------------------------------------------------------------------------------------------+
-
 
 This cog can be installed through the following command:
 
@@ -90,6 +80,19 @@ These commands do as described, with ``reload`` unloading and loading cogs again
 ``reload`` is actually an alias of ``load``, extensions are automatically reloaded based on their presence.
 
 Reloading jishaku itself can be done conventionally with ``[jishaku|jsk] reload jishaku``.
+
+Task queue
+~~~~~~~~~~
+
+Some actions jishaku can do may take a long time, and could be invoked incorrectly or by accident.
+As such, jishaku implements a command queue that long-lasting commands are submitted to.
+
+- ``[jishaku|jsk] tasks``
+- ``[jishaku|jsk] cancel <id>``
+
+``tasks`` shows which tasks are currently running, for what commands. You can use this to figure out which task you need to cancel.
+
+``cancel`` cancels a task by a given ID. It will accept a numeric ID as shown in ``tasks``. Supplying ``-1`` will make it cancel the last task submitted.
 
 Python REPL
 ~~~~~~~~~~~
@@ -143,7 +146,9 @@ Jishaku can invoke other commands on your bot in special modes:
 
 - ``[jishaku|jsk] sudo <command string>``
 - ``[jishaku|jsk] debug <command string>``
+- ``[jishaku|jsk] repeat <times> <command string>``
 - ``[jishaku|jsk] su <member> <command string>``
+- ``[jishaku|jsk] in <channel> <command string>``
 
 ``sudo`` invokes a command bypassing all checks and cooldowns. This may also invoke parent group callbacks, depending on how the command is defined.
 For example, ``jsk sudo foo`` will invoke ``foo`` regardless of if checks or cooldowns fail.
@@ -153,6 +158,9 @@ This means if an exception occurs, it will be direct messaged to you like as in 
 
 When execution finishes, the time taken to complete execution will be sent as a message.
 
+``repeat`` invokes a command many times in a row. It acts the same as a direct message invocation, so it *will* obey cooldowns if commands have them.
+As this command may take a long time, it is submitted to the task queue so it can be cancelled.
+
 ``su`` invokes a command as if it was invoked directly by another member.
 This allows you to effectively impersonate another account to your own bot, such that you can perform actions on their behalf or test command behavior.
 
@@ -160,3 +168,6 @@ For example, ``jsk su @Clyde#0001 foo`` will invoke ``foo`` as if it was used di
 This command won't work on users that the bot cannot see.
 
 Trying to use this command with a user that is not in the current guild (if applicable) will work, but may cause weird side effects, so it is recommended to restrict usage to available members.
+
+``in`` invokes a command as if it was invoked in another channel.
+In guilds, this only works in channels of the same guild, but can work across guilds if ``in`` is used in a DM.
